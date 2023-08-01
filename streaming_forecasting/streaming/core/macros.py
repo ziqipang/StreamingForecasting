@@ -1,0 +1,8 @@
+ARGO_VEHICLE_CLASSES = [
+    "VEHICLE",
+    "LARGE_VEHICLE",
+    "BUS",
+    "TRAILER",
+    "EMERGENCY_VEHICLE",
+    "SCHOOL_BUS"
+]

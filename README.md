@@ -1,5 +1,7 @@
 # [IROS 2023] Streaming Motion Forecasting for Autonomous Driving
 
+[Ziqi Pang](https://ziqipang.github.io/), [Deva Ramanan](https://www.cs.cmu.edu/~deva/), [Mengtian Li](https://mtli.github.io/), [Yu-Xiong Wang](https://yxw.web.illinois.edu/)
+
 ## Introduction
 
 This is the official code for our IROS 2023 paper: "Streaming Motion Forecasting for Autonomous Driving." We propose to view the motion forecasting from a **streaming** perspective, where the predictions are made on continuous frames, instead of the conventional **snapshot-based** forecasting.
@@ -8,21 +10,23 @@ If you find our code or paper useful, please cite by:
 ```Tex
 @inproceedings{pang2023streaming,
   title={Streaming motion forecasting for autonomous driving},
-  author={Pang, Ziqi and Ramanan, Deva and Mengtian, Li and Yu-Xiong, Wang},
+  author={Pang, Ziqi and Ramanan, Deva and Li, Mengtian and Wang, Yu-Xiong},
   booktitle={2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
   year={2023}
 }
 ```
 
-## Getting Started
+## Getting Started with Benchmark (Argoverse-SF)
 
-### Install `streaming_forecasting` toolkit
+### Install `streaming_forecasting` Toolkit
 
-We recommend install it locally via:
+* We recommend install our `streaming_forecasting` toolkit locally via:
 
 ```bash
 pip install -e ./
 ```
+
+* Then install the `argoverse-api` following their [instructions](https://github.com/argoverse/argoverse-api#installation).
 
 ### Data Preparation
 <details>
@@ -83,10 +87,6 @@ In the pretraining step, we will use the forecasting data to train a snapshot-ba
 ```bash
 tar -xvf forecasting_val_v1.1.tar.gz
 ```
-
-#### Install the `argoverse-api`
-
-* Rigorously follow their [instructions](https://github.com/argoverse/argoverse-api#installation).
 </details>
 
 ### Benchmark (Argoverse-SF) Creation
@@ -96,31 +96,57 @@ tar -xvf forecasting_val_v1.1.tar.gz
 
 We will walk you through:
 * Generating the Argoverse-SF benchmark files for evaluation and visualization.
-* Generating the information files for dataloading during training and inference. 
+* Generating the information files for dataloading during training and inference, recording the ground truth trajectories and orders of frames. 
 
 #### Benchmark Creation
 
-Please use our `./tools/argoverse_sf_creation.py` to create the Argoverse-SF benchmark, which supports evaluation. The commands is as below, if you follow our instructions on softlinking the argoverse datasets to `./data` in **Dataset Preparation**. After this step, you will see `eval_cat_val.pkl` and `eval_cat_train.pkl` popping up in `./data/streaming_forecasting`.
+Please use our `./tools/benchmark/argoverse_sf_creation.py` to create the Argoverse-SF benchmark, which supports evaluation. The commands is as below, if you follow our instructions on softlinking the argoverse datasets to `./data` as described in [[Dataset Preparation]](https://github.com/ziqipang/StreamingForecasting#data-preparation). After this step, you will see `eval_cat_val.pkl` and `eval_cat_train.pkl` popping up in `./data/streaming_forecasting`.
 ```bash
 mkdir ./data/streaming_forecasting
 
 # training set
-python tools/argoverse_sf_creation.py --data_dir ./data/argoverse_tracking/train --output_dir ./data/streaming_forecasting --save_prefix eval_cat_train --hist_length 20 --fut_length 30 
+python tools/benchmark/argoverse_sf_creation.py --data_dir ./data/argoverse_tracking/train --output_dir ./data/streaming_forecasting --save_prefix eval_cat_train --hist_length 20 --fut_length 30 
 
 # validation set
-python tools/argoverse_sf_creation.py --data_dir ./data/argoverse_tracking/val --output_dir ./data/streaming_forecasting --save_prefix eval_cat_val --hist_length 20 --fut_length 30
+python tools/benchmark/argoverse_sf_creation.py --data_dir ./data/argoverse_tracking/val --output_dir ./data/streaming_forecasting --save_prefix eval_cat_val --hist_length 20 --fut_length 30
 ```
 
 If you want any customization, please follow the template below.
 ```bash
 # training set
-python tools/argoverse_sf_creation.py --data_dir $path_to_tracking_train --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_train --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
+python tools/benchmark/argoverse_sf_creation.py --data_dir $path_to_tracking_train --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_train --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
 
 # validation set
-python tools/argoverse_sf_creation.py --data_dir $path_to_tracking_val --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_val --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
+python tools/benchmark/argoverse_sf_creation.py --data_dir $path_to_tracking_val --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_val --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
+```
+
+#### Information File Creation
+
+Please use our `./tools/benchmark/info_file.py` to create the information files for Argoverse-SF. We mimic the style in `mmdetection` and `mmdetection3d` in organizing the information needed for training, inference, and evaluation.
+
+The command is as below, if you follow our instructions to prepare the paths of data. After running these scripts, you will see `infos_train.pkl` and `infos_val.pkl` in `./data/streaming_forecasting`.
+```bash
+# training set
+python tools/benchmark/info_file.py --save_prefix infos_train --benchmark_file eval_cat_train.pkl --data_dir ./data/argoverse_tracking/train
+
+# validation set
+python tools/benchmark/info_file.py --save_prefix infos_val --benchmark_file eval_cat_val.pkl --data_dir ./data/argoverse_tracking/val
+```
+
+If you want any customization, please follow the template below.
+```bash
+# training set
+python tools/benchmark/info_file.py --data_dir $path_to_tracking_train --output_dir $path_to_save_streaming_benchmark --save_prefix infos_train --benchmark_file eval_cat_train.pkl --hist_length $history_length_of_forecasting --fut_length $prediction_horizon  
+
+# validation set
+python tools/benchmark/info_file.py --data_dir $path_to_tracking_validation --output_dir $path_to_save_streaming_benchmark --save_prefix infos_val --benchmark_file eval_cat_val.pkl --hist_length $history_length_of_forecasting --fut_length $prediction_horizon  
 ```
 
 </details>
+
+## Getting Started with Streaming Algorithm (Predictive Streamer)
+
+### Streaming Inference on Argoverse-SF
 
 ### Pretraining on the Forecasting Split
 
@@ -232,3 +258,5 @@ lr_decay_rate: 0.25
 
 
 </details>
+
+### Finetuning and Training Predictive Streamers on Argoverse-SF

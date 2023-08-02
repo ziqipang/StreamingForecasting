@@ -64,13 +64,14 @@ class ForecasterAPI:
         pickle.dump(graph, open(file_path, 'wb'))
 
 
-def api_builder(model_name, dataset_config, model_config, weight_path, device='cuda:0') -> ProphetAPI:
+def api_builder(model_name, dataset_config, model_config, weight_path, device='cuda:0', load_weight=True):
     model = build_model(model_name, model_config)(model_config)
     dataset, _ = build_dataset(model_name, dataset_config)
     dataset = dataset(dataset_config['val_dir'], dataset_config, map_preprocess=None)
 
-    ckpt = torch.load(weight_path, map_location=lambda storage, loc: storage)
-    load_pretrain(model, ckpt['state_dict'])
+    if load_weight:
+        ckpt = torch.load(weight_path, map_location=lambda storage, loc: storage)
+        load_pretrain(model, ckpt['state_dict'])
 
     map_reader = dataset.map_reader
     return ForecasterAPI(dataset, model, map_reader, device)

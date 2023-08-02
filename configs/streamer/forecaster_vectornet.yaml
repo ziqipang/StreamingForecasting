@@ -1,0 +1,42 @@
+data:
+  batch_size: 32
+  val_batch_size: 32
+  workers: 4
+  val_workers: 4
+  train_dir: ./data/argoverse_forecasting/train/
+  val_dir: ./data/argoverse_forecasting/val/
+  sample_dir: ./data/argoverse_forecasting/sample/
+  train_map_dir: ./data/argoverse/preprocessed_map_for/gnn/train/
+  val_map_dir: ./data/argoverse/preprocessed_map_for/gnn/val/
+  ratio: 1.0
+  pred_range:
+    - -100.0
+    - 100.0
+    - -100.0
+    - 100.0
+
+model:
+  multimod: False
+  global_graph_depth: 1
+  subgraph_depth: 03
+  num_scales: 6
+  n_actor: 128
+  n_map: 128
+  pred_size: 30
+  num_preds: 30
+  num_hist: 20
+  num_mods: 6
+  cls_coef: 1.0
+  cls_th: 2.0
+  mgn: 0.2
+  cls_ignore: 0.2
+  pred_coef: 1.0
+  pred_range:
+    - -100.0
+    - 100.0
+    - -100.0
+    - 100.0
+  online:
+    max_agt_num: 128
+    max_batch_size: 32
+    use_prev_traj: False

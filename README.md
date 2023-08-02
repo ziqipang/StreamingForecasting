@@ -61,7 +61,7 @@ tar -xvf tracking_val_v1.1.tar.gz -C ./
 # Exclude the images if you have limited disk space
 tar -xvf tracking_val_v1.1.tar.gz --exclude="*.jpg" -C ./
 ``` 
-* Move everything out of `argoverse_tracking/` and Merge the training files 
+* Move everything out of `argoverse_tracking/` and merge the training files 
 ```bash
 # move everything out
 mv argoverse_tracking/* ./
@@ -119,5 +119,116 @@ python tools/argoverse_sf_creation.py --data_dir $path_to_tracking_train --outpu
 # validation set
 python tools/argoverse_sf_creation.py --data_dir $path_to_tracking_val --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_val --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
 ```
+
+</details>
+
+### Pretraining on the Forecasting Split
+
+Before deploying on the **streaming forecasting** setup, we leverage the forecasting split to pretrain a strong forecasting model. You can skip this step by **directly downloading our pretrained checkpoint.** [[link]](https://www.dropbox.com/s/lsrszkb9emzgy7d/vectornet.ckpt?dl=0)
+
+<details>
+<summary> Pretraining details. Click to view </summary>
+
+#### Pretraining commands
+
+If you have followed the previous steps, especially the paths to data. Training and evaluating VectorNet on Argoverse's forecasting training/validation sets are as simple as:
+```bash
+# training
+python tools/pretrain/train_forecaster_vectornet.py --exp_name $your_experiment_name --model_save_dir $directory_to_save
+
+# validation
+python tools/pretrain/eval_forecaster_vectornet.py --weight_path $path_to_trained_model
+```
+
+For example, my command is as simple as:
+```
+# training
+# use wandb for logging
+python tools/pretrain/train_forecaster_vectornet.py --exp_name pretrain --model_save_dir ./results --wandb
+
+# validation
+python tools/pretrain/eval_forecaster_vectornet.py --weight_path vectornet.ckpt
+```
+
+The expected results of the validation process is similar to below. We focus on minADE, minFDE, and MR.
+```
+------------------------------------------------
+Prediction Horizon : 30, Max #guesses (K): 6
+------------------------------------------------
+{'minADE': 0.7742552296892377, 'minFDE': 1.1925503502421884, 'MR': 0.12593737332792865, 'p-minADE': nan, 'p-minFDE': nan, 'p-MR': 0.8569636313846993, 'brier-minADE': 6.351643563315018, 'brier-minFDE': 6.769938683867964, 'DAC': 0.9879999324415611}
+------------------------------------------------
+------------------------------------------------
+Prediction Horizon : 30, Max #guesses (K): 1
+------------------------------------------------
+{'minADE': 1.53590666902302, 'minFDE': 3.373533234667678, 'MR': 0.5553810295905959, 'p-minADE': 1.53590666902302, 'p-minFDE': 3.373533234667678, 'p-MR': 0.5553810295905959, 'brier-minADE': 1.53590666902302, 'brier-minFDE': 3.373533234667678, 'DAC': 0.9887515200648561}
+------------------------------------------------
+```
+
+Suppose you need to customize the training process, such as path to data or optimization details, change the configuration files:
+<details>
+<summary> Customizing pretraining. Click to view </summary>
+
+We provide configuration via `yaml`-based files.
+
+* `./configs/forecaster/VectorNet.yaml` specify the sub-configuration files controlling the behaviors of data loading, model architecture, and optimization.
+
+* Data loading:
+
+```yaml
+# batch size
+batch_size: 32 
+val_batch_size: 32 
+
+# number of workers in the dataloader
+workers: 4
+val_workers: 4
+
+# path to the forecasting data
+train_dir: ./data/argoverse_forecasting/train/data/
+val_dir: ./data/argoverse_forecasting/val/data/
+train_map_dir: null
+val_map_dir: null
+
+# use all the training data
+ratio: 1.0
+
+# perception range [xxyy]
+pred_range:
+  - -100.0
+  - 100.0
+  - -100.0
+  - 100.0
+```
+
+* Model architecture, please use our default VectorNet.
+
+* Optimization:
+```yaml
+# beginning epoch
+epoch: 0
+optimizer: adam
+# total epoch
+num_epochs: 24
+# frequency of saving checkpoints
+save_freq: 1.0
+
+# base learning rate
+lr: 0.0005
+weight_decay: 1.0e-4
+# iterations for warmup
+warmup_iters: 1000
+warmup_ratio: 1.0e-3
+grad_clip: 1.0e-1
+
+# when to drop the learning rate
+lr_decay_epoch:
+  - 16
+  - 20
+# ratio of dropping learning rate
+lr_decay_rate: 0.25
+```
+
+</details>
+
 
 </details>

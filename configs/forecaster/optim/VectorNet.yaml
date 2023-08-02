@@ -1,0 +1,15 @@
+epoch: 0
+optimizer: adam
+num_epochs: 24
+save_freq: 1.0
+
+lr: 0.0005
+weight_decay: 1.0e-4
+warmup_iters: 1000
+warmup_ratio: 1.0e-3
+grad_clip: 1.0e-1
+
+lr_decay_epoch:
+  - 16
+  - 20
+lr_decay_rate: 0.25

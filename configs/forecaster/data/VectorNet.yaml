@@ -1,0 +1,18 @@
+batch_size: 32
+val_batch_size: 32
+workers: 4
+val_workers: 4
+
+train_dir: ./data/argoverse_forecasting/train/data/
+val_dir: ./data/argoverse_forecasting/val/data/
+train_map_dir: null
+# train_map_dir: ./data/argoverse/preprocessed_map/gnn/train/
+val_map_dir: null
+# val_map_dir: ./data/argoverse/preprocessed_map/gnn/val/
+
+ratio: 1.0
+pred_range:
+  - -100.0
+  - 100.0
+  - -100.0
+  - 100.0

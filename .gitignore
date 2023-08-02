@@ -1,5 +1,7 @@
 # Data
-data/
+data/*
+ckpts/*
+results/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

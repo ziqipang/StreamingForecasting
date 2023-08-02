@@ -1,0 +1,11 @@
+multimod: False
+global_graph_depth: 1
+subgraph_depth: 3
+num_scales: 6
+n_actor: 128
+n_map: 128
+pred_size: 30
+num_preds: 30
+num_mods: 6
+cls_coef: 1.0
+ref_coef: 1.0

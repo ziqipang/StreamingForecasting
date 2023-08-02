@@ -1,0 +1,3 @@
+data: ./configs/forecaster/data/VectorNet.yaml
+model: ./configs/forecaster/model/VectorNet.yaml
+optim: ./configs/forecaster/optim/VectorNet.yaml

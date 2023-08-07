@@ -3,7 +3,7 @@
 """
 import numpy as np, copy, os, math
 from typing import List, Dict
-from ..core import Track, Position, Instances
+from ...streaming.core import Track, Position, Instances
 
 import torch
 import torch.nn as nn
@@ -168,9 +168,6 @@ class StreamingVectorNet(nn.Module):
         node_feats = self.globalgraphs(node_feats, node_masks)
         actor_feats = [node_feats[i, :actor_nums[i]] for i in range(batch_size)]
         actor_feats = torch.cat(actor_feats, dim=0)
-        if self.multimod:
-            N, hidden_dim = actor_feats.shape
-            actor_feats = actor_feats.view(N, 1, hidden_dim).repeat(1, self.num_mod, 1).contiguous()
         return actor_feats, actor_idcs, actor_ctrs, query_keys, prior_fut_trajs
     
     def decoding(self, actor_feats, actor_idcs, actor_ctrs, data, device='cuda:0'):

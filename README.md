@@ -2,7 +2,7 @@
 
 [Ziqi Pang](https://ziqipang.github.io/), [Deva Ramanan](https://www.cs.cmu.edu/~deva/), [Mengtian Li](https://mtli.github.io/), [Yu-Xiong Wang](https://yxw.web.illinois.edu/)
 
-## Introduction
+## 1. Introduction
 
 This is the official code for our IROS 2023 paper: "Streaming Motion Forecasting for Autonomous Driving." We propose to view the motion forecasting from a **streaming** perspective, where the predictions are made on continuous frames, instead of the conventional **snapshot-based** forecasting.
 
@@ -16,9 +16,11 @@ If you find our code or paper useful, please cite by:
 }
 ```
 
-## Getting Started with Benchmark (Argoverse-SF)
+## 2. Getting Started with Benchmark (Argoverse-SF)
 
-### Install `streaming_forecasting` Toolkit
+If you wish to evaluate using the protocol of our streaming forecasting, please pay most attention to the [`Result Format and Evaluation`]() section.
+
+### 2.1 Install `streaming_forecasting` Toolkit
 
 * We recommend install our `streaming_forecasting` toolkit locally via:
 
@@ -28,13 +30,13 @@ pip install -e ./
 
 * Then install the `argoverse-api` following their [instructions](https://github.com/argoverse/argoverse-api#installation).
 
-### Data Preparation
+### 2.2 Data Preparation
 <details>
 <summary>Click to view the details</summary>
 
 You will prepare the argoverse dataset, both tracking and forecasting splits included. **We recommend you putting the tracking and forecasting into separate directories.** For instance, I use directories `~/datasets/argoverse/tracking` and `~/datasets/argoverse/forecasting`. 
 
-Remember to soft-link your data location to `./data/argoverse_forecasting` and `./data/argoverse_tracking`. The file structure would be similar to:
+Remember to soft-link your data location to `./data/argoverse_forecasting` and `./data/argoverse_tracking`. The final file structure would be similar to:
 ```
 ./data
     -- argoverse_tracking
@@ -52,7 +54,7 @@ Remember to soft-link your data location to `./data/argoverse_forecasting` and `
                 xxx.csv, xxx.csv, xxx.csv
 ```
 
-#### Tracking data
+#### 2.2.1 Tracking data
 
 Argoverse-SF models streaming forecasting by re-purposing the tracking data from Argoverse. Please skip this step if you already have it.
 
@@ -78,7 +80,7 @@ mv train3/* train
 mv train4/* train
 ```
 
-#### Forecasting data
+#### 2.2.2 Forecasting data
 In the pretraining step, we will use the forecasting data to train a snapshot-based forecasting model, just like normal forecasters on Argoverse.
 
 * Download the forecasting split from [Argoverse Link](https://www.argoverse.org/av1.html#download-link). You will see 1 `*.tar.gz` for the training set and 1 `*.tar.gz` for the validation set.
@@ -89,7 +91,7 @@ tar -xvf forecasting_val_v1.1.tar.gz
 ```
 </details>
 
-### Benchmark (Argoverse-SF) Creation
+### 2.3 Benchmark (Argoverse-SF) Creation
 
 <details>
 <summary>Click to view the details</summary>
@@ -98,7 +100,7 @@ We will walk you through:
 * Generating the Argoverse-SF benchmark files for evaluation and visualization.
 * Generating the information files for dataloading during training and inference, recording the ground truth trajectories and orders of frames. 
 
-#### Benchmark Creation
+#### 2.3.1 Benchmark Creation
 
 Please use our `./tools/benchmark/argoverse_sf_creation.py` to create the Argoverse-SF benchmark, which supports evaluation. The commands is as below, if you follow our instructions on softlinking the argoverse datasets to `./data` as described in [[Dataset Preparation]](https://github.com/ziqipang/StreamingForecasting#data-preparation). After this step, you will see `eval_cat_val.pkl` and `eval_cat_train.pkl` popping up in `./data/streaming_forecasting`.
 ```bash
@@ -120,7 +122,7 @@ python tools/benchmark/argoverse_sf_creation.py --data_dir $path_to_tracking_tra
 python tools/benchmark/argoverse_sf_creation.py --data_dir $path_to_tracking_val --output_dir $path_to_save_streaming_benchmark --save_prefix eval_cat_val --hist_length $history_length_of_forecasting --fut_length $prediction_horizon 
 ```
 
-#### Information File Creation
+#### 2.3.2 Information File Creation
 
 Please use our `./tools/benchmark/info_file.py` to create the information files for Argoverse-SF. We mimic the style in `mmdetection` and `mmdetection3d` in organizing the information needed for training, inference, and evaluation.
 
@@ -144,18 +146,103 @@ python tools/benchmark/info_file.py --data_dir $path_to_tracking_validation --ou
 
 </details>
 
-## Getting Started with Streaming Algorithm (Predictive Streamer)
+### 2.4 Format of Results and Evaluation Protocol
 
-### Streaming Inference on Argoverse-SF
+<details>
+<summary> Evaluation. Click to view details. </summary>
 
-### Pretraining on the Forecasting Split
+#### 2.4.1 Format of Results
+
+To evaluate on Argoverse-SF, the result file is `.pkl` file compressing a python list, where each item in the list is the result of one frame. For reference, you can check our [VectorNet result file](https://www.dropbox.com/s/rr4gh7ezm0ooffp/vectornet_streaming_inference.pkl?dl=0) for a rough sense.
+
+Specifically, you would use the information file generated before `infos_val.pkl`. With each item in `infos_val.pkl`, your result file should also be a list corresponding to each sample in `infos_val.pkl`. Please note that the trajectories are in the **world coordinate**.
+```python
+result = 
+[
+  # Result for sample[0] in infos_val.pkl 
+  {
+    ...
+  },
+  ...
+  # Result for sample[i] in infos_val.pkl
+  {
+    # sequence name in Argoverse, 
+    # you should directly copy from sample[i]['seq_name']
+    'seq_name': str, 
+    # city_name in Argoverse,
+    # you should directly copy from sample[i]['city_name']
+    'city_name': str,
+    # frame number in the sequence,
+    # you should directly copy from sample[i]['frame_index']
+    'frame_index': int,
+    # results of your predictions
+    # dictonary with keys being every agent id specified in sample[i]['query_keys']
+    'results': {
+      # key0 in sample[i]['query_keys]
+      sample[i]['query_keys'][0]: ...,
+      ...
+      # keyj in sample[i]['query_keys]
+      sample[i]['query_keys'][j]: {'trajs': numpy array shaped [6, 30, 2], 'confidences': numpy array shaped [6]},
+      ...
+      sample[i]['query_keys'][-1]: ...
+    }
+  },
+  ...
+  # Result for sample[-1] in infos_val.pkl
+  {
+    ...
+  },
+]
+```
+
+#### 2.4.2 Evaluation
+
+To evaluate the inference results, run the following command and you will find the `metrics.json` in you specified `$directory_to_save_metric_file`
+```bash
+python tools/evaluation.py --result_file $path_streaming_inference.pkl --metric_file_prefix $directory_to_save_metric_file
+```
+
+For example, I want to evaluate my `VectorNet` results and save to `./results/VectorNet`, then:
+```bash
+python tools/evaluation.py --result_file ./results/VectorNet/streaming_inference.pkl --metric_file_prefix ./results/VectorNet/
+```
+
+We structure the metric results in the following way:
+* The items of `ade6`, `fde6`, and `mr6` means the minADE, minFDE and miss rate for `K=6`, where the forecaster predicts 6 trajectories for each agent.
+* We divide 4 groups of agents to acquire the above metrics. The groups are organized according to moving (`move`) and static (`stay`) motion, and visible (`vis`) and occluded (`occ`) states.
+* Finally, the items begin with "`ave-`" are the major metrics that come from averaging all the groups.
+
+</details>
+
+
+## 3. Getting Started with Streaming Algorithm (Predictive Streamer)
+
+### 3.1 Streaming Inference on Argoverse-SF
+
+<details>
+
+<summary> Inference details. Click to view. </summary>
+
+We use `tools/inference.py` to run streaming forecasting iteratively on every frame. Its template is as below. After running the command, a `streaming_inference.pkl` will appear at the directory of `$path_to_save_results`, which is the result file.
+```bash
+python tools/inference.py --config $config_path --weight_path $your_checkpoint --save_prefix $path_to_save_results
+```
+
+For example, if you use our provided `VectorNet` checkpoint and save the results to `./results/VectorNet`, you could simply run as below.
+```bash
+python tools/inference.py --config configs/streamer/config.yaml --weight_path ./ckpts/vectornet.ckpt --save_prefix ./results/VectorNet/
+```
+
+</details>
+
+### 3.2 Pretraining on the Forecasting Split
 
 Before deploying on the **streaming forecasting** setup, we leverage the forecasting split to pretrain a strong forecasting model. You can skip this step by **directly downloading our pretrained checkpoint.** [[link]](https://www.dropbox.com/s/lsrszkb9emzgy7d/vectornet.ckpt?dl=0)
 
 <details>
-<summary> Pretraining details. Click to view </summary>
+<summary> Pretraining details. Click to view. </summary>
 
-#### Pretraining commands
+#### 3.2.1 Pretraining commands
 
 If you have followed the previous steps, especially the paths to data. Training and evaluating VectorNet on Argoverse's forecasting training/validation sets are as simple as:
 ```bash
@@ -259,4 +346,4 @@ lr_decay_rate: 0.25
 
 </details>
 
-### Finetuning and Training Predictive Streamers on Argoverse-SF
+### 3.3 Finetuning and Training Predictive Streamers on Argoverse-SF

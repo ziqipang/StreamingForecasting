@@ -13,7 +13,7 @@ import streaming_forecasting as SF
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='./configs/streamer/config.yaml')
+    parser.add_argument('--config', type=str, default='./configs/streamer/config_single_frame.yaml')
     parser.add_argument('--hdmap_dir', type=str, default='./data/argoverse_tracking/')
     args = parser.parse_args()
     return args
@@ -41,7 +41,7 @@ def main(args):
         
         save_dir = os.path.join(args.hdmap_dir, f'{split}_hdmaps')
         os.makedirs(save_dir, exist_ok=True)
-        
+
         pbar = tqdm(total=len(streaming_reader))
         for i in range(len(streaming_reader)):
             streaming_reader.preprocess_map(

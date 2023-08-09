@@ -61,7 +61,7 @@ def main(args):
 
     device = 'cuda:0'
     model_name = configs['forecasting']['streaming_model_name']
-    model =SF.streamer.build_model(model_name, configs).to(device)
+    model = SF.streamer.build_model(model_name, configs).to(device)
     ckpt = torch.load(args.weight_path, map_location=lambda storage, loc: storage)
     model.load_pretrain(ckpt['state_dict'])
 

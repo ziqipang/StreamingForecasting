@@ -15,6 +15,7 @@ class JointLoss(nn.Module):
         self.num_preds = self.config['num_preds']
 
         self.pred_loss = nn.SmoothL1Loss(reduction='sum')
+        self.single_pred_loss = nn.SmoothL1Loss(reduction='sum')
     
     def forward(self, out, gt_futures, gt_future_masks, device='cuda:0'):
         ''' Compute the loss for the output
@@ -26,7 +27,14 @@ class JointLoss(nn.Module):
                 conf_loss, pred_loss, and combined loss
         '''
         # ========== Preprare the data ========== #
-        confs, preds = out['confidence'], out['prediction']
+        confs, preds, single_preds = out['confidence'], out['prediction'], out['single_prediction']
+        confs = torch.cat(confs, dim=0)  # N * K
+        preds = torch.cat(preds, dim=0)  # N * K * T * 2
+        single_preds = torch.cat(single_preds, dim=0)  # N * T * 2
+        # N * T * 2
+        gt_futures = torch.cat([x for x in gt_futures], dim=0).to(device, non_blocking=True)
+        # N * T
+        gt_future_masks = torch.cat([x for x in gt_future_masks], dim=0).to(device, non_blocking=True)
         # confs = torch.cat(confs, dim=0)  # N * K
         # preds = torch.cat(preds, dim=0)  # N * K * T * 2
         # N * T * 2
@@ -41,6 +49,7 @@ class JointLoss(nn.Module):
         max_last_vals, max_last_idcs = last.max(1) # N, N
         mask = (max_last_vals > 1.0) # N, actors that have future ground truth
         confs, preds, gt_futures, gt_future_masks = confs[mask], preds[mask], gt_futures[mask], gt_future_masks[mask]
+        single_preds = single_preds[mask]
         last_idcs = max_last_idcs[mask]
 
         # 2. select the branches that minimize FDE values
@@ -70,14 +79,17 @@ class JointLoss(nn.Module):
         pred_branches = preds[actor_idcs, branch_idx]
         pred_loss = self.pred_loss(pred_branches[gt_future_masks], gt_futures[gt_future_masks])
         pred_loss *= self.config['pred_coef']
-
+        single_pred_loss = self.single_pred_loss(single_preds[actor_idcs][gt_future_masks], gt_futures[gt_future_masks])
+        single_pred_loss *= self.config['pred_coef']
         # ========== Wrap up ========== #
         num_conf = num_pred = actor_num
         conf_loss /= (num_conf + 1e-10)
         pred_loss /= (num_pred + 1e-10)
+        single_pred_loss /= (num_pred + 1e-10)
         loss = {
             'conf': conf_loss,
             'pred': pred_loss,
-            'loss': conf_loss + pred_loss
+            'single_pred': single_pred_loss,
+            'loss': conf_loss + pred_loss + single_pred_loss
         }
         return loss

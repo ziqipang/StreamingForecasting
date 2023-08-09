@@ -23,6 +23,9 @@ class RegressionDecoder(nn.Module):
             ) for _ in range(self.num_modalities)
         ]
         self.preds = nn.ModuleList(preds)
+        self.single_pred = nn.Sequential(
+            LinearResidualBlock(self.n_dim, self.n_dim),
+            nn.Linear(self.n_dim, 2 * self.num_preds))
 
         # delta information is helpful for classification
         # use it to generate K different features for each branch
@@ -39,6 +42,7 @@ class RegressionDecoder(nn.Module):
             predictions.append(self.preds[i](actors).unsqueeze(1))
         predictions = torch.cat(predictions, 1) # N * K * (steps * 2)
         predictions = predictions.view(predictions.shape[0], self.num_modalities, self.num_preds, 2)
+        single_predictions = self.single_pred(actors).view(predictions.shape[0], self.num_preds, 2)
 
         # ========== Classification ========== #
         batch_size = len(actor_idcs)
@@ -46,6 +50,7 @@ class RegressionDecoder(nn.Module):
             idcs = actor_idcs[i]
             ctrs = actor_ctrs[i].view(-1, 1, 1, 2)
             predictions[idcs] = predictions[idcs] + ctrs
+            single_predictions[idcs] = single_predictions[idcs] + actor_ctrs[i].view(-1, 1, 2)
         
         pred_ctrs = predictions[:, :, -1].detach()
         actor_feats = self.delta_fusion(actors, torch.cat(actor_ctrs, dim=0), pred_ctrs)
@@ -59,11 +64,12 @@ class RegressionDecoder(nn.Module):
         cls_idcs = cls_idcs.view(-1)
         predictions = predictions[row_idcs, cls_idcs].view(cls_scores.shape[0], cls_scores.shape[1], -1, 2)
         
-        result = {'confidence': [], 'prediction': []}
+        result = {'confidence': [], 'prediction': [], 'single_prediction': []}
         for i in range(batch_size):
             idcs = actor_idcs[i]
             result['confidence'].append(cls_scores[idcs])
             result['prediction'].append(predictions[idcs])
+            result['single_prediction'].append(single_predictions[idcs])
         return result
 
 

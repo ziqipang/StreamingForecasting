@@ -1,0 +1,41 @@
+general:
+  num_mod: 6
+  hist_len: 20
+  fut_len: 30
+
+data:
+  train:
+    data_dir: ./data/argoverse_tracking/
+    benchmark_file: ./data/streaming_forecasting/eval_cat_train.pkl
+    infos_file: ./data/streaming_forecasting/infos_train.pkl
+    hdmap_dir: ./data/argoverse_tracking/train_hdmaps/
+    frames_per_sample: 5
+    batch_size: 32
+  val:
+    data_dir: ./data/argoverse_tracking/
+    benchmark_file: ./data/streaming_forecasting/eval_cat_val.pkl
+    infos_file: ./data/streaming_forecasting/infos_val.pkl
+    hdmap_dir: ./data/argoverse_tracking/val_hdmaps/
+    frames_per_sample: 1
+
+forecasting:
+  model_name: VectorNet
+  streaming_model_name: StreamingVectorNet
+  model_config_path: ./configs/streamer/forecaster_vectornet_occ_reasoning.yaml
+  model_weight_path: ./ckpts/vectornet.ckpt  
+
+optim:  
+  epoch: 0
+  optimizer: adam
+  num_epochs: 8
+  save_freq: 1.0
+
+  # warm_up_iters: 100
+  # warm_up_ratio: 1.0e-3
+  
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  grad_clip: 1.0e-1
+ 
+  lr_decay_epoch: []
+  lr_decay_rate: 0.1

@@ -217,7 +217,18 @@ We structure the metric results in the following way:
 
 ## 3. Getting Started with Streaming Algorithm (Predictive Streamer)
 
-### 3.1 Streaming Inference on Argoverse-SF
+### 3.1 HD-Map Preprocessing
+
+<details>
+<summary> HD-Map preprocessing. Click to view. </summary>
+The first step is to preprocess the HD-Maps to accelerate the development. This part is mainly designed to assist the VectorNet and MMTransformer used in the paper. If you have followed the previous steps in data preparation, especially the soft linking of directories, running the commands below is enough.
+
+```bash
+python tools/benchmark/hd_map_preprocess.py
+```
+</details>
+
+### 3.2 Streaming Inference on Argoverse-SF
 
 <details>
 
@@ -235,14 +246,14 @@ python tools/inference.py --config configs/streamer/config.yaml --weight_path ./
 
 </details>
 
-### 3.2 Pretraining on the Forecasting Split
+### 3.3 Pretraining on the Forecasting Split
 
 Before deploying on the **streaming forecasting** setup, we leverage the forecasting split to pretrain a strong forecasting model. You can skip this step by **directly downloading our pretrained checkpoint.** [[link]](https://www.dropbox.com/s/lsrszkb9emzgy7d/vectornet.ckpt?dl=0)
 
 <details>
 <summary> Pretraining details. Click to view. </summary>
 
-#### 3.2.1 Pretraining commands
+#### 3.3.1 Pretraining commands
 
 If you have followed the previous steps, especially the paths to data. Training and evaluating VectorNet on Argoverse's forecasting training/validation sets are as simple as:
 ```bash
@@ -346,4 +357,24 @@ lr_decay_rate: 0.25
 
 </details>
 
-### 3.3 Finetuning and Training Predictive Streamers on Argoverse-SF
+### 3.4 Finetuning Forecasters for Streaming Forecasting
+
+We describe how to finetune any forecasting model for the streaming setup.
+
+<details>
+<summary> Finetuning instructions. Click to view. </summary>
+
+Suppose you have a pretrained forecaster, immitate how our [`streaming_vectornet.py`](./streaming_forecasting/streamer/models/streaming_vectornet.py) turn a regular VectorNet in [`VectorNet.py`](./streaming_forecasting/forecaster/models/VectorNet.py) into a streaming version of VectorNet. The key part is to use `instances` for storing the temporal information. Then we can finetune the new streaming model by:
+```bash
+# use --wandb if you have a wandb logger to use
+python tools/train_streaming.py --config $config_path --weight_path $pretrained_forecaster --name $exp_name --save_prefix $directory_to_save_results
+```
+Specifically, if you follow the previous paths, you can finetune from the pretrained [VectorNet](https://www.dropbox.com/s/lsrszkb9emzgy7d/vectornet.ckpt?dl=0) provided by us with the following link:
+```bash
+python tools/train_streaming.py --config ./configs/streamer/config.yaml --weight_path ./ckpts/vectornet.ckpt --name finetune --save_prefix ./results/
+```
+After this, you can see several checkpoints popping up in `./results/finetune/ckpts/`. The final one is the finetuned model.
+
+</details>
+
+### 3.4 Training and Evaluating Our Predictive Streamers

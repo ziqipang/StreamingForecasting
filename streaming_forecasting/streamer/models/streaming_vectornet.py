@@ -181,6 +181,10 @@ class StreamingVectorNet(nn.Module):
             world_coord_preds = torch.matmul(output['prediction'][i], norm_rot[i].to(device))
             world_coord_preds += norm_center[i].to(device).view(1, 1, 1, -1)
             output['prediction'][i] = world_coord_preds
+
+            single_preds = torch.matmul(output['single_prediction'][i], norm_rot[i].to(device))
+            single_preds += norm_center[i].to(device).view(1, 1, -1)
+            output['single_prediction'][i] = single_preds
         
         output['indexes'] = [None for _ in range(batch_size) ]
         for i in range(batch_size):
@@ -211,7 +215,7 @@ class StreamingVectorNet(nn.Module):
         # ========== Compute the loss =========== #
         if compute_loss:
             loss_dict = self.loss_single_frame(loss_dict, data, query_keys,
-                                          preds, confidences, indexes, frame_index)
+                                               output, indexes, frame_index)
 
         # ========== Return the results ========== #
         output_result = dict()
@@ -340,7 +344,7 @@ class StreamingVectorNet(nn.Module):
         return agt_feats, query_keys, all_prior_fut_trajs
     
     def loss(self, loss_dict, frame_num):
-        for field in ['loss_pred', 'loss_conf', 'loss']:
+        for field in ['loss_pred', 'loss_conf', 'loss_single', 'loss']:
             sum_loss = 0
             for i in range(frame_num):
                 sum_loss += loss_dict[f'f{i}.{field}']
@@ -348,34 +352,34 @@ class StreamingVectorNet(nn.Module):
             loss_dict[field] = sum_loss
         return loss_dict
 
-    def loss_single_frame(self, loss_dict, data, query_keys, preds, confidence, indexes, frame_index):
-        # ========== Acquire the ground truth ========== #
+    def loss_single_frame(self, loss_dict, data, query_keys, output, indexes, frame_index):
+         # ========== Acquire the ground truth ========== #
         raw_fut_trajs, raw_fut_masks = data['fut_trajs'], data['fut_masks']
         batch_size = len(raw_fut_trajs)
         fut_trajs, fut_masks = list(), list()
+        device = output['prediction'][0].device
         for b in range(batch_size):
             keys = [query_keys[b][i] for i in indexes[b]]
             
             sample_fut_trajs = [raw_fut_trajs[b][k][None, ...] for k in keys]
             sample_fut_trajs = torch.cat(sample_fut_trajs, dim=0)
-            fut_trajs.append(sample_fut_trajs)
+            fut_trajs.append(sample_fut_trajs.float()[..., :2])
 
             sample_fut_masks = [raw_fut_masks[b][k][None, ...] for k in keys]
             sample_fut_masks = torch.cat(sample_fut_masks, dim=0)
-            fut_masks.append(sample_fut_masks)
-        fut_trajs = torch.cat(fut_trajs, dim=0)[..., :2].to(preds.device)
-        fut_masks = torch.cat(fut_masks, dim=0).to(preds.device)
+            fut_masks.append(sample_fut_masks.bool())
 
         # ========== Compute the loss ========== #
         losses = self.loss_func(
-            out={'prediction': preds, 'confidence': confidence},
-            gt_futures=fut_trajs.float(),
-            gt_future_masks=fut_masks.bool(),
-            device=preds.device)
+            out=output,
+            gt_futures=fut_trajs,
+            gt_future_masks=fut_masks,
+            device=device)
         
         # ========== Modify the loss dictionary ========== #
         loss_dict[f'f{frame_index}.loss_pred'] = losses['pred']
         loss_dict[f'f{frame_index}.loss_conf'] = losses['conf']
+        loss_dict[f'f{frame_index}.loss_single'] = losses['single_pred']
         loss_dict[f'f{frame_index}.loss'] = losses['loss']
         return loss_dict
     

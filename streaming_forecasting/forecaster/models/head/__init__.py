@@ -1,1 +1,1 @@
-from .regression import RegressionDecoder
+from .regression import RegressionDecoder, LinearResidualBlock

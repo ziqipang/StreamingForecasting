@@ -11,7 +11,7 @@ class Track:
         # trajectory data
         self.traj = np.zeros((max_len, 3))
         # mask of having data or not
-        self.mask = np.zeros(max_len).astype(np.int)
+        self.mask = np.zeros(max_len).astype(np.int32)
         self.frames = list()
         
         self.traj[start_frame] = start_pos.xyz

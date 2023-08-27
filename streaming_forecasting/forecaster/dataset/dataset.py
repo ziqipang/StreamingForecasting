@@ -87,7 +87,7 @@ class ArgoDataset(Dataset):
             df.Y.to_numpy().reshape(-1, 1)), 1)
         
         steps = [mapping[x] for x in df['TIMESTAMP'].values]
-        steps = np.asarray(steps, np.int64)
+        steps = np.asarray(steps, np.int32)
 
         objs = df.groupby(['TRACK_ID', 'OBJECT_TYPE']).groups
         keys = list(objs.keys())
@@ -191,7 +191,7 @@ class ArgoDataset(Dataset):
             gt_preds = np.asarray(gt_preds, np.float32)
             has_preds = np.asarray(has_preds, np.bool)
     
-        data['indexes'] = np.array(valid_agt_idx).astype(np.int)
+        data['indexes'] = np.array(valid_agt_idx).astype(np.int32)
         data['actors'] = feats
         data['ctrs'] = ctrs
         data['norm_center'] = orig

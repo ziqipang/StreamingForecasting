@@ -26,7 +26,7 @@ class KFPrior:
     
         # use the observed history to fit the KF
         # make prediction jointly
-        result_traj, result_steps = np.zeros((hist_len, 2)), np.zeros(hist_len).astype(np.int)
+        result_traj, result_steps = np.zeros((hist_len, 2)), np.zeros(hist_len).astype(np.int32)
         fut_traj = np.zeros((fut_len, 2))
         first_step = track.frames[0]
         kf.x[:2] = track.traj[first_step, :2].reshape((2, 1))

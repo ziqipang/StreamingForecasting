@@ -11,8 +11,10 @@ import torch.nn.functional as F
 
 from ...forecaster.models.encoder import GlobalAttentionGraph, SubgraphMLP
 from ...forecaster.models.batching import (batch_actors, batch_lanes)
-from ...forecaster.models.head import RegressionDecoder
+from ...forecaster.models.head import RegressionDecoder, LinearResidualBlock
 from ...forecaster.dataset import ref_copy, collate_fn
+
+from .df import DiffKF, MultiDiffKF
 
 from .loss import JointLoss
 
@@ -27,6 +29,8 @@ class StreamingVectorNet(nn.Module):
         self.num_mod = model_config['num_mods']
         self.hist_len = model_config['num_hist']
         self.fut_len = model_config['num_preds']
+        self.occ_steps = self.model_config['num_preds']
+        self.embed_dim = 256
 
         # streaming parts
         self.max_agt_num = model_config['streaming']['max_agt_num']
@@ -52,6 +56,24 @@ class StreamingVectorNet(nn.Module):
         self.instances = None
         self.cur_seq = ''
         self.cur_frame_index = 0
+
+        # Use differentiable filters
+        self.use_df = model_config['streaming']['use_df']
+        if self.use_df:
+            # DF for single-model trajectories
+            self.df = DiffKF(1, self.fut_len * 2)
+            self.df_r_net = nn.Sequential(
+                LinearResidualBlock(256, 256),
+                nn.Linear(256, 1))
+            self.df_r_net.apply(init_weights)
+            # DF for multi-modal trajectories
+            self.multi_df = MultiDiffKF(self.num_mod, self.fut_len * 2)
+            self.multi_df_r_net = nn.Sequential(
+                LinearResidualBlock(256, 256),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Linear(128, 1))
+            self.multi_df_r_net.apply(init_weights)
         return
 
     def generate_empty_instances(self, device, inference=False):
@@ -60,12 +82,23 @@ class StreamingVectorNet(nn.Module):
             max_batch_size = 1
         else:
             max_batch_size = self.max_batch_size
+        instances.agt_feats = torch.full((max_batch_size, self.max_agt_num, self.embed_dim), 0, dtype=torch.float32, device=device)
         instances.hist_trajs = torch.full((max_batch_size, self.max_agt_num, self.hist_len, 2), 0, dtype=torch.float32, device=device)
         instances.fut_trajs = torch.full((max_batch_size, self.max_agt_num, 6, self.fut_len, 2), 0, dtype=torch.float32, device=device)
         instances.fut_scores = torch.full((max_batch_size, self.max_agt_num, 6), 0, dtype=torch.float32, device=device)
+        instances.occ_trajs = torch.full((max_batch_size, self.max_agt_num, self.occ_steps, 2), 0, dtype=torch.float32, device=device)
+        instances.occ_len = torch.full((max_batch_size, self.max_agt_num), self.occ_steps, dtype=torch.long, device=device)
+
+        if self.use_df:
+            instances = self.generate_df_instances(instances)
         
         # store the information of agents of the instances
         self.track_ids = list(list() for _ in range(self.max_batch_size))
+        return instances
+    
+    def generate_df_instances(self, instances):
+        instances = self.df.initialize_beliefs(instances)
+        instances = self.multi_df.initialize_beliefs(instances)
         return instances
     
     def forward(self, data, device='cuda:0', compute_loss=True):
@@ -201,9 +234,48 @@ class StreamingVectorNet(nn.Module):
 
         # ========== Decode trajectories in the world coordinate ========== #
         output = self.decoding(actor_feats, actor_idcs, actor_ctrs, data, device)
+        indexes = [x.detach().cpu().numpy() for x in output['indexes']]
+
+        # ========== Process with differentiable filtering ========== #
+        if self.use_df:
+            batch_size = len(output['prediction'])
+            agt_instances_indexes = [torch.tensor([self.track_ids[b].index(k) for k in data['query_keys'][b]]) for b in range(batch_size)]
+    
+            # save the agent features
+            for i in range(batch_size):
+                idcs = actor_idcs[i]
+                feats = actor_feats[idcs]
+                idxes = agt_instances_indexes[i]
+                agt_instances.agt_feats[i, idxes] = feats.detach().clone()
+
+        if self.use_df:
+            r = self.df_r_net(actor_feats) ** 2
+            r = [r[idcs] for idcs in actor_idcs]
+
+            multi_r = self.multi_df_r_net(actor_feats) ** 2
+            multi_r = [multi_r[idcs] for idcs in actor_idcs]
+        else:
+            r = None
+            multi_r = None
         
         # ========== Save the trajectories back to the instances ========== #
-        agt_instances = self.load_trajs(output['prediction'], agt_instances, data['query_keys'])
+        agt_instances = self.load_trajs(output['prediction'], output['confidence'],
+                                        agt_instances, data['query_keys'],
+                                        data['update_keys'], r_cov=multi_r)
+        trajs = self.restore_prediction_trajs(agt_instances, agt_instances_indexes)
+        output['prediction'] = trajs
+
+        occ_predictions = list()
+        for batch_idx in range(batch_size):
+            sample_predictions = output['prediction'][batch_idx]
+            sample_confs = output['confidence'][batch_idx]
+            cls_scores, cls_idcs = sample_confs.sort(dim=1, descending=True)
+            cls_max_idcs = cls_idcs[:, 0]
+            row_idcs = torch.arange(len(cls_max_idcs)).long().to(cls_max_idcs.device)
+            occ_predictions.append(sample_predictions[row_idcs, cls_max_idcs])
+        
+        agt_instances = self.load_occ_trajs(occ_predictions, agt_instances, data['query_keys'], data['update_keys'])
+        occ_trajs = self.restore_occ_prediction_trajs(agt_instances, agt_instances_indexes)
 
         # ========== Aggregate the results ========== #
         preds = [x for x in output['prediction']]
@@ -251,6 +323,7 @@ class StreamingVectorNet(nn.Module):
                                              dim=-2) 
         
         # load new data
+        data['update_keys'] = list()
         for batch_idx in range(batch_size):
             # query keys
             observation_keys = data['observation_keys'][batch_idx]
@@ -275,6 +348,7 @@ class StreamingVectorNet(nn.Module):
                         pass
                 else:
                     related_keys.append(track_id)
+            data['update_keys'].append(related_keys)
 
             hist_trajs = torch.full((len(related_keys), self.hist_len, 2), 0, dtype=torch.float32, device=device)
             for i, track_id in enumerate(related_keys):
@@ -393,6 +467,16 @@ class StreamingVectorNet(nn.Module):
             movements.append(normalized_predictions)
         return movements
     
+    def compute_occ_prediction_movements(self, occ_predictions, agt_instances, indexes):
+        movements = list()
+        for i, idxes in enumerate(indexes):
+            preds = occ_predictions[i].detach().clone() # agt_num * T * 2
+            hist_pos = agt_instances.hist_trajs[i, idxes, -1] # agt_num * 2
+            normalized_predictions = preds - hist_pos[:, None, :]
+            normalized_predictions[:, 1:] = normalized_predictions[:, 1:] - normalized_predictions[:, :-1]
+            movements.append(normalized_predictions)
+        return movements
+    
     def restore_prediction_trajs(self, agt_instances, indexes):
         trajs = list()
         for i, idxes in enumerate(indexes):
@@ -403,12 +487,43 @@ class StreamingVectorNet(nn.Module):
             trajs.append(restored_trajs)
         return trajs
     
-    def load_trajs(self, predictions, agt_instances, query_keys):
+    def restore_occ_prediction_trajs(self, agt_instances, indexes):
+        trajs = list()
+        for i, idxes in enumerate(indexes):
+            preds = agt_instances.occ_trajs[i, idxes] # agt_num * T * 2
+            hist_pos = agt_instances.hist_trajs[i, idxes, -1] # agt_num * 2
+            normalized_trajs = torch.cumsum(preds, dim=-2)
+            occ_trajs = normalized_trajs + hist_pos[:, None, :]
+            trajs.append(occ_trajs)
+        return trajs
+    
+    def load_trajs(self, predictions, scores, agt_instances, query_keys, update_keys, r_cov):
+        # use r_cov only when df is used
         batch_size = len(query_keys)
         indexes = [[self.track_ids[b].index(k) for k in query_keys[b]] for b in range(batch_size)]
         movements = self.compute_prediction_movements(predictions, agt_instances, indexes)
+
+        if not self.use_df:
+            for i in range(batch_size):
+                agt_instances.fut_trajs[i, indexes[i]] = movements[i]
+        else:
+            observations = [movements[i].detach().clone().reshape(-1, self.num_mod, self.fut_len * 2) for i in range(batch_size)]
+            observation_confs = [scores[i].detach().clone() for i in range(batch_size)]
+            agt_instances = self.multi_df(agt_instances, observations, observation_confs, indexes, r_cov=r_cov)
+            for i in range(batch_size):
+                agt_instances.fut_trajs[i, indexes[i]] = agt_instances.mm_belief_mean[i, indexes[i]].clone().reshape(-1, self.num_mod, self.fut_len, 2)
+                agt_instances.fut_scores[i, indexes[i]] = agt_instances.mm_belief_conf[i, indexes[i]].clone()
+        return agt_instances
+    
+    def load_occ_trajs(self, occ_predictions, agt_instances, query_keys, update_keys):
+        batch_size = len(query_keys)
+        indexes = [torch.tensor([self.track_ids[b].index(k) for k in query_keys[b]]) for b in range(batch_size)]
+        occluded = [torch.tensor([k not in update_keys[b] for k in query_keys[b]]) for b in range(batch_size)]
+        device = agt_instances.occ_trajs.device
+        occ_movements = self.compute_occ_prediction_movements(occ_predictions, agt_instances, indexes)
+        
         for i in range(batch_size):
-            agt_instances.fut_trajs[i, indexes[i]] = movements[i]
+            agt_instances.occ_trajs[i, indexes[i]] = occ_movements[i]
         return agt_instances
     
     def load_pretrain(self, pretrain_dict):
@@ -487,3 +602,10 @@ class StreamingVectorNet(nn.Module):
         data['gt_futures'] = gt_preds
         data['gt_future_masks'] = has_preds
         return data
+
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            nn.init.uniform_(m.bias)

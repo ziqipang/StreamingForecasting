@@ -154,7 +154,7 @@ class VecMapReader:
         
         # ========== Select the valid idcs ========== #
         valid_idcs = [i for i, id in enumerate(graph['lane_ids']) if id in lane_ids]
-        valid_idcs = np.asarray(valid_idcs).astype(np.int)
+        valid_idcs = np.asarray(valid_idcs).astype(np.int32)
         
         centerlines = graph['centerlines'][valid_idcs].astype(np.float32)
         controls = graph['controls'][valid_idcs].astype(np.float32)

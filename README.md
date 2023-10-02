@@ -4,7 +4,9 @@
 
 ## 1. Introduction
 
-This is the official code for our IROS 2023 paper: "Streaming Motion Forecasting for Autonomous Driving." We propose to view the motion forecasting from a **streaming** perspective, where the predictions are made on continuous frames, instead of the conventional **snapshot-based** forecasting.
+This is the official code for our IROS 2023 paper: "Streaming Motion Forecasting for Autonomous Driving." We propose to view the motion forecasting from a **streaming** perspective, where the predictions are made on continuous frames, instead of the conventional **snapshot-based** forecasting. As shown in the figure below, we highlight predicting trajectories on **continuous** frames, introducing the new challenges of **occlusion reasoning** and **temporal coherence** for motion forecasting.
+
+![img](assets/streaming_example.gif)
 
 If you find our code or paper useful, please cite by:
 ```Tex
@@ -378,3 +380,11 @@ After this, you can see several checkpoints popping up in `./results/finetune/ck
 </details>
 
 ### 3.4 Training and Evaluating Our Predictive Streamers
+
+* TBD
+
+## 4. Planerary Sections
+Due to tight schedules, I am cleaning the code and writing documentations for the following parts.
+* Model zoo.
+* Easy way to use config file.
+* Design docs for the implementations and system design.

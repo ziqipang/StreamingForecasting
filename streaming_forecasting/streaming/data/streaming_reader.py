@@ -133,7 +133,7 @@ class StreamingReader(Dataset):
         ego_key = [k for k in query_keys if 'ego' in k][0]
         ego_traj = [self.trajs[ego_key]['traj'][frame_index - self.hist_len + 1: frame_index + 1, :2]]
         ego_steps = [np.arange(self.hist_len)]
-        ego_ts = [result['hist_ts'][ego_steps[0].astype(np.int)]]
+        ego_ts = [result['hist_ts'][ego_steps[0].astype(np.int32)]]
         
         # use forecaster api to convert the data formats that are suitable for direct inference
         hdmap_data = {
@@ -199,7 +199,7 @@ class StreamingReader(Dataset):
         ego_key = [k for k in query_keys if 'ego' in k][0]
         ego_traj = [self.trajs[ego_key]['traj'][frame_index - self.hist_len + 1: frame_index + 1, :2]]
         ego_steps = [np.arange(self.hist_len)]
-        ego_ts = [result['hist_ts'][ego_steps[0].astype(np.int)]]
+        ego_ts = [result['hist_ts'][ego_steps[0].astype(np.int32)]]
         
         # use forecaster api to convert the data formats that are suitable for direct inference
         hdmap_data = {
